@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Grocery Store Management{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h2 class="mb-4"><i class="fas fa-chart-line me-2"></i>Dashboard</h2>
+    </div>
+</div>
+
+<!-- Summary Cards -->
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title">Today's Sales</h6>
+                        <h2 class="mb-0" id="todaySales">₹0</h2>
+                        <small class="opacity-75">Daily revenue</small>
+                    </div>
+                    <i class="fas fa-rupee-sign fa-3x opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title">Monthly Sales</h6>
+                        <h2 class="mb-0" id="monthlySales">₹0</h2>
+                        <small class="opacity-75">This month</small>
+                    </div>
+                    <i class="fas fa-calendar fa-3x opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-dark h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title">Transactions Today</h6>
+                        <h2 class="mb-0" id="todayTransactions">0</h2>
+                        <small class="opacity-75">Orders completed</small>
+                    </div>
+                    <i class="fas fa-shopping-cart fa-3x opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-danger text-white h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title">Low Stock Items</h6>
+                        <h2 class="mb-0" id="lowStockCount">0</h2>
+                        <small class="opacity-75">Need restocking</small>
+                    </div>
+                    <i class="fas fa-exclamation-triangle fa-3x opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row -->
+<div class="row g-4 mb-4">
+    <div class="col-md-8">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Weekly Sales</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="weeklySalesChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-star me-2"></i>Top Selling Products</h5>
+            </div>
+            <div class="card-body">
+                <div id="topProductsList">
+                    <p class="text-muted text-center">Loading...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Additional Stats -->
+<div class="row g-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Low Stock Alerts</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm" id="lowStockTable">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Stock</th>
+                                <th>Threshold</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td colspan="3" class="text-center text-muted">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Monthly Sales Trend</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="monthlySalesChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let weeklyChart = null;
+let monthlyChart = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadDashboardData();
+});
+
+async function loadDashboardData() {
+    try {
+        const [statsResponse, chartResponse] = await Promise.all([
+            fetch('/api/dashboard/stats'),
+            fetch('/api/reports/chart-data')
+        ]);
+        
+        const stats = await statsResponse.json();
+        const chartData = await chartResponse.json();
+        
+        // Update summary cards
+        document.getElementById('todaySales').textContent = '₹' + stats.today_sales.toFixed(2);
+        document.getElementById('monthlySales').textContent = '₹' + stats.monthly_sales.toFixed(2);
+        document.getElementById('todayTransactions').textContent = stats.today_transactions;
+        document.getElementById('lowStockCount').textContent = stats.low_stock_count;
+        
+        // Update low stock table
+        const lowStockBody = document.querySelector('#lowStockTable tbody');
+        if (stats.low_stock_products && stats.low_stock_products.length > 0) {
+            lowStockBody.innerHTML = stats.low_stock_products.map(p => `
+                <tr>
+                    <td>${p.product_name}</td>
+                    <td><span class="badge bg-danger">${p.quantity}</span></td>
+                    <td>${p.low_stock_threshold}</td>
+                </tr>
+            `).join('');
+        } else {
+            lowStockBody.innerHTML = '<tr><td colspan="3" class="text-center text-success">All products well stocked</td></tr>';
+        }
+        
+        // Update top products list
+        const topProductsDiv = document.getElementById('topProductsList');
+        if (stats.top_products && stats.top_products.length > 0) {
+            topProductsDiv.innerHTML = '<ul class="list-group list-group-flush">' + 
+                stats.top_products.map((p, i) => `
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>${i+1}. ${p.product_name}</span>
+                        <span class="badge bg-primary rounded-pill">${p.total_sold} sold</span>
+                    </li>
+                `).join('') + '</ul>';
+        } else {
+            topProductsDiv.innerHTML = '<p class="text-muted text-center">No sales data yet</p>';
+        }
+        
+        // Render charts
+        renderWeeklyChart(chartData.weekly);
+        renderMonthlyChart(chartData.monthly);
+        
+    } catch (error) {
+        console.error('Error loading dashboard data:', error);
+    }
+}
+
+function renderWeeklyChart(data) {
+    const ctx = document.getElementById('weeklySalesChart').getContext('2d');
+    
+    if (weeklyChart) weeklyChart.destroy();
+    
+    weeklyChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.map(d => new Date(d.date).toLocaleDateString('en-IN', { weekday: 'short' })),
+            datasets: [{
+                label: 'Sales (₹)',
+                data: data.map(d => d.sales),
+                borderColor: 'rgb(54, 162, 235)',
+                backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+}
+
+function renderMonthlyChart(data) {
+    const ctx = document.getElementById('monthlySalesChart').getContext('2d');
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    
+    if (monthlyChart) monthlyChart.destroy();
+    
+    monthlyChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: data.map(d => months[d.month - 1]),
+            datasets: [{
+                label: 'Monthly Sales (₹)',
+                data: data.map(d => d.sales),
+                backgroundColor: 'rgba(75, 192, 192, 0.6)',
+                borderColor: 'rgb(75, 192, 192)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+}
+</script>
+{% endblock %}
